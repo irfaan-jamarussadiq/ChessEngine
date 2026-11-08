@@ -24,12 +24,18 @@ namespace ChessEngine.Services
             SearchContext context = new();
             int bestScore = EvaluateStatic(board);
             int completedDepth = 0;
+            IReadOnlyList<PrincipalVariation> topLines = Array.Empty<PrincipalVariation>();
 
             for (int depth = 1; depth <= MaxDepth; depth++)
             {
                 try
                 {
-                    bestScore = Search(board, depth, -MateScore, MateScore, 0, context);
+                    RootSearchResult result = SearchRoot(board, depth, context);
+                    bestScore = result.Score;
+                    topLines = result.Lines
+                        .Take(3)
+                        .Select(line => new PrincipalVariation(line.Score, ToSan(board, line.Moves)))
+                        .ToArray();
                     completedDepth = depth;
                 }
                 catch (SearchLimitReachedException)
@@ -38,11 +44,57 @@ namespace ChessEngine.Services
                 }
             }
 
-            return new PositionEvaluation(bestScore, completedDepth, context.Nodes);
+            return new PositionEvaluation(bestScore, completedDepth, context.Nodes, topLines);
+        }
+
+        private RootSearchResult SearchRoot(Board board, int depth, SearchContext context)
+        {
+            List<ChessMove> moves = GetLegalMoves(board);
+            if (moves.Count == 0)
+            {
+                int score = board.IsKingInCheck(board.WhiteToMove)
+                    ? board.WhiteToMove ? -MateScore : MateScore
+                    : 0;
+                return new RootSearchResult(score, Array.Empty<SearchLine>());
+            }
+
+            moves.Sort((left, right) => GetMoveOrderScore(board, right).CompareTo(GetMoveOrderScore(board, left)));
+            List<SearchLine> lines = new(3);
+            bool maximizing = board.WhiteToMove;
+            foreach (ChessMove move in moves)
+            {
+                int alpha = maximizing && lines.Count == 3 ? lines[2].Score : -MateScore;
+                int beta = !maximizing && lines.Count == 3 ? lines[2].Score : MateScore;
+                Board child = board.CloneAndApplyGeneratedMove(move);
+                int score = Search(child, depth - 1, alpha, beta, 1, context);
+                if (lines.Count == 3 && (maximizing ? score <= alpha : score >= beta))
+                {
+                    continue;
+                }
+
+                List<ChessMove> continuation = new(depth);
+                continuation.Add(move);
+                for (int ply = 1; ply < context.PrincipalVariationLengths[1]; ply++)
+                {
+                    continuation.Add(context.PrincipalVariations[1, ply]!);
+                }
+
+                lines.Add(new SearchLine(score, continuation));
+                lines.Sort((left, right) => maximizing
+                    ? right.Score.CompareTo(left.Score)
+                    : left.Score.CompareTo(right.Score));
+                if (lines.Count > 3)
+                {
+                    lines.RemoveAt(3);
+                }
+            }
+
+            return new RootSearchResult(lines[0].Score, lines);
         }
 
         private int Search(Board board, int depth, int alpha, int beta, int ply, SearchContext context)
         {
+            context.PrincipalVariationLengths[ply] = ply;
             if (++context.Nodes > MaxNodes)
             {
                 throw SearchLimitReachedException.Instance;
@@ -75,12 +127,20 @@ namespace ChessEngine.Services
 
                 if (maximizing)
                 {
-                    bestScore = Math.Max(bestScore, score);
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        UpdatePrincipalVariation(move, ply, context);
+                    }
                     alpha = Math.Max(alpha, bestScore);
                 }
                 else
                 {
-                    bestScore = Math.Min(bestScore, score);
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        UpdatePrincipalVariation(move, ply, context);
+                    }
                     beta = Math.Min(beta, bestScore);
                 }
 
@@ -90,6 +150,29 @@ namespace ChessEngine.Services
                 }
             }
             return bestScore;
+        }
+
+        private static void UpdatePrincipalVariation(ChessMove move, int ply, SearchContext context)
+        {
+            context.PrincipalVariations[ply, ply] = move;
+            for (int childPly = ply + 1; childPly < context.PrincipalVariationLengths[ply + 1]; childPly++)
+            {
+                context.PrincipalVariations[ply, childPly] = context.PrincipalVariations[ply + 1, childPly];
+            }
+
+            context.PrincipalVariationLengths[ply] = context.PrincipalVariationLengths[ply + 1];
+        }
+
+        private static IReadOnlyList<string> ToSan(Board board, IReadOnlyList<ChessMove> moves)
+        {
+            Board notationBoard = board.Clone();
+            List<string> notation = new(moves.Count);
+            foreach (ChessMove move in moves)
+            {
+                notation.Add(notationBoard.MakeMove(move));
+            }
+
+            return notation;
         }
 
         private static int EvaluateStatic(Board board)
@@ -194,6 +277,11 @@ namespace ChessEngine.Services
         private sealed class SearchContext
         {
             public int Nodes { get; set; }
+            public ChessMove?[,] PrincipalVariations { get; } = new ChessMove?[MaxDepth + 1, MaxDepth + 1];
+            public int[] PrincipalVariationLengths { get; } = new int[MaxDepth + 1];
         }
+
+        private sealed record SearchLine(int Score, IReadOnlyList<ChessMove> Moves);
+        private sealed record RootSearchResult(int Score, IReadOnlyList<SearchLine> Lines);
     }
 }

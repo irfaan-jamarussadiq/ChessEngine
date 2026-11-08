@@ -4,6 +4,128 @@
 // Write your JavaScript code.
 
 document.addEventListener("DOMContentLoaded", () => {
+    const paletteToggle = document.querySelector("#palette-toggle");
+    const palettePopover = document.querySelector("#palette-popover");
+    const paletteMenu = document.querySelector("#palette-menu");
+    const boardColorsOption = document.querySelector("#palette-board-colors");
+    const paletteOptions = document.querySelector("#palette-options");
+
+    if (paletteToggle && palettePopover && paletteMenu && boardColorsOption && paletteOptions) {
+        const storageKey = "chess-board-palette";
+        const palettes = Array.from({ length: 100 }, (_, index) => {
+            const hue = Math.round(index * 137.508 % 360);
+            const saturation = 42 + (index * 37 % 49);
+            const lightness = 76 + (index * 17 % 17);
+            const darkness = 24 + (index * 23 % 21);
+            return {
+                light: `hsl(${hue} ${saturation}% ${lightness}%)`,
+                dark: `hsl(${hue} ${saturation}% ${darkness}%)`
+            };
+        });
+        let selectedPalette = -1;
+
+        function setPalette(index, persist) {
+            const palette = palettes[index];
+            if (!palette) {
+                return;
+            }
+
+            selectedPalette = index;
+            document.documentElement.style.setProperty("--board-light-square", palette.light);
+            document.documentElement.style.setProperty("--board-dark-square", palette.dark);
+            paletteOptions.querySelectorAll(".palette-option").forEach((option, optionIndex) => {
+                option.setAttribute("aria-pressed", String(optionIndex === index));
+                option.tabIndex = optionIndex === index ? 0 : -1;
+            });
+
+            if (persist) {
+                try {
+                    localStorage.setItem(storageKey, String(index));
+                } catch {
+                }
+            }
+        }
+
+        palettes.forEach((palette, index) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "palette-option";
+            option.setAttribute("aria-label", `Palette ${String(index + 1).padStart(2, "0")}, light and dark board colors`);
+            option.setAttribute("aria-pressed", "false");
+            option.tabIndex = index === 0 ? 0 : -1;
+            option.style.setProperty("--palette-light", palette.light);
+            option.style.setProperty("--palette-dark", palette.dark);
+            option.addEventListener("click", () => {
+                setPalette(index, true);
+                palettePopover.hidden = true;
+                paletteToggle.setAttribute("aria-expanded", "false");
+                paletteToggle.focus();
+            });
+            paletteOptions.append(option);
+        });
+
+        let savedPalette;
+        try {
+            savedPalette = Number.parseInt(localStorage.getItem(storageKey), 10);
+        } catch {
+            savedPalette = -1;
+        }
+        if (Number.isInteger(savedPalette) && savedPalette >= 0 && savedPalette < palettes.length) {
+            setPalette(savedPalette, false);
+        }
+
+        boardColorsOption.addEventListener("click", () => {
+            paletteMenu.hidden = true;
+            paletteOptions.hidden = false;
+            paletteOptions.querySelector(".palette-option[tabindex='0']")?.focus();
+        });
+
+        paletteToggle.addEventListener("click", () => {
+            palettePopover.hidden = !palettePopover.hidden;
+            paletteToggle.setAttribute("aria-expanded", String(!palettePopover.hidden));
+            if (!palettePopover.hidden) {
+                paletteMenu.hidden = false;
+                paletteOptions.hidden = true;
+                boardColorsOption.focus();
+            }
+        });
+
+        paletteOptions.addEventListener("keydown", event => {
+            const option = event.target.closest(".palette-option");
+            if (!option) {
+                return;
+            }
+
+            const currentIndex = Array.from(paletteOptions.children).indexOf(option);
+            const moves = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 2, ArrowUp: -2 };
+            if (!(event.key in moves)) {
+                return;
+            }
+
+            event.preventDefault();
+            const nextIndex = Math.max(0, Math.min(palettes.length - 1, currentIndex + moves[event.key]));
+            const nextOption = paletteOptions.children[nextIndex];
+            option.tabIndex = -1;
+            nextOption.tabIndex = 0;
+            nextOption.focus();
+        });
+
+        document.addEventListener("click", event => {
+            if (!palettePopover.hidden && !palettePopover.contains(event.target) && !paletteToggle.contains(event.target)) {
+                palettePopover.hidden = true;
+                paletteToggle.setAttribute("aria-expanded", "false");
+            }
+        });
+
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && !palettePopover.hidden) {
+                palettePopover.hidden = true;
+                paletteToggle.setAttribute("aria-expanded", "false");
+                paletteToggle.focus();
+            }
+        });
+    }
+
     const board = document.querySelector(".board");
     if (!board) {
         return;
@@ -15,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resetButton = document.querySelector("#reset-board");
     const moveHistoryElement = document.querySelector("#move-history");
     const emptyHistoryElement = document.querySelector("#history-empty");
+    const principalVariationsElement = document.querySelector("#principal-variations");
     const evaluationBar = document.querySelector("#evaluation-bar");
     const evaluationBarWhite = document.querySelector("#evaluation-bar-white");
     const evaluationScore = document.querySelector("#evaluation-score");
@@ -37,10 +160,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return fen.split(" ")[1] === "w" ? "white" : "black";
     }
 
+    function formatEvaluation(centipawns) {
+        return Math.abs(centipawns) >= 99000
+            ? `${centipawns > 0 ? "White" : "Black"} mates`
+            : `${centipawns > 0 ? "+" : ""}${(centipawns / 100).toFixed(2)}`;
+    }
+
     async function updateEvaluation() {
         const requestVersion = ++evaluationRequestVersion;
         const requestedFen = fen;
         evaluationScore.textContent = "Evaluating…";
+        principalVariationsElement.replaceChildren();
         try {
             const response = await fetch(board.dataset.evaluateUrl, {
                 method: "POST",
@@ -58,17 +188,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const centipawns = result.centipawns;
             const whiteShare = Math.max(5, Math.min(95, 50 + Math.tanh(centipawns / 600) * 45));
-            evaluationBarWhite.style.height = `${whiteShare}%`;
             evaluationBar.setAttribute("aria-valuenow", String(Math.round(whiteShare)));
-            const scoreText = Math.abs(centipawns) >= 99000
-                ? `${centipawns > 0 ? "White" : "Black"} mates`
-                : `${centipawns > 0 ? "+" : ""}${(centipawns / 100).toFixed(2)}`;
+            const scoreText = formatEvaluation(centipawns);
+            evaluationBarWhite.style.width = `${whiteShare}%`;
             evaluationBar.setAttribute("aria-valuetext", `${scoreText}, depth ${result.depth}`);
             evaluationScore.textContent = `${scoreText} · depth ${result.depth}`;
+
+            for (const [index, line] of (result.lines || []).entries()) {
+                const item = document.createElement("li");
+                item.className = "principal-variation";
+
+                const score = document.createElement("span");
+                score.className = "principal-variation-score";
+                score.textContent = formatEvaluation(line.centipawns);
+
+                const moves = document.createElement("span");
+                moves.className = "principal-variation-moves";
+                moves.textContent = line.moves.join(" ");
+                item.setAttribute("aria-label", `Line ${index + 1}: ${score.textContent} ${moves.textContent}`);
+                item.append(score, moves);
+                principalVariationsElement.append(item);
+            }
         } catch {
             if (requestVersion === evaluationRequestVersion && requestedFen === fen) {
                 evaluationScore.textContent = "Unavailable";
                 evaluationBar.setAttribute("aria-valuetext", "Evaluation unavailable");
+                principalVariationsElement.replaceChildren();
             }
         }
     }

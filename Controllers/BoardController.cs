@@ -33,7 +33,12 @@ namespace ChessEngine.Controllers
                 {
                     centipawns = evaluation.Centipawns,
                     depth = evaluation.CompletedDepth,
-                    nodes = evaluation.Nodes
+                    nodes = evaluation.Nodes,
+                    lines = evaluation.TopLines.Select(line => new
+                    {
+                        centipawns = line.Centipawns,
+                        moves = line.Moves
+                    })
                 });
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)

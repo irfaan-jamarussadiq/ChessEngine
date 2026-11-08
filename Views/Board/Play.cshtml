@@ -30,14 +30,21 @@
             <button type="button" data-promotion="cancel">Cancel</button>
         </div>
     </div>
-    <div class="evaluation-panel" aria-label="Position evaluation">
-        <div id="evaluation-bar" class="evaluation-bar" role="meter" aria-label="White advantage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="Equal position">
-            <div id="evaluation-bar-white" class="evaluation-bar-white"></div>
+    <section class="move-history-panel" aria-label="Position analysis and move history">
+        <div class="evaluation-panel" aria-label="Position evaluation">
+            <output id="evaluation-score" class="evaluation-score" aria-live="polite">Evaluating…</output>
+            <div id="evaluation-bar" class="evaluation-bar" role="meter" aria-label="White advantage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="Equal position">
+                <div id="evaluation-bar-white" class="evaluation-bar-white"></div>
+            </div>
         </div>
-        <output id="evaluation-score" class="evaluation-score" aria-live="polite">Evaluating…</output>
-    </div>
-    <section class="move-history-panel" aria-label="Move history">
-        <ol id="move-history" class="move-history" aria-live="polite"></ol>
-        <p id="history-empty">No moves yet.</p>
+        <section class="principal-variations-panel" aria-label="Top three lines">
+            <h2 class="analysis-section-title">Top lines</h2>
+            <ol id="principal-variations" class="principal-variations" aria-live="polite"></ol>
+        </section>
+        <section class="move-history-section" aria-label="Move history">
+            <h2 class="analysis-section-title">Moves</h2>
+            <ol id="move-history" class="move-history" aria-live="polite"></ol>
+            <p id="history-empty">No moves yet.</p>
+        </section>
     </section>
 </div>
