@@ -1,21 +1,20 @@
-# Use the official .NET 10 SDK image to build the application
-FROM ://microsoft.com AS build-env
-WORKDIR /source
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
+WORKDIR /app
 
-# Copy the project file and restore dependencies
-COPY ChessEngine.csproj .
+# Copy project files
+COPY . ./
+
+# Restore dependencies
 RUN dotnet restore
 
-# Copy the rest of the application files and build
-COPY . .
-RUN dotnet publish ChessEngine.csproj -c Release -o /app/publish /p:UseAppHost=false
+# Build and publish
+RUN dotnet publish -c Release -o out
 
-# Build runtime image
-FROM ://microsoft.com
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
-COPY --from=build-env /app/publish .
 
-# Render dynamically assigns a port via the PORT env variable (usually 10000)
-ENV ASPNETCORE_URLS=http://+:10000
+COPY --from=build-env /app/out .
 
 ENTRYPOINT ["dotnet", "ChessEngine.dll"]
