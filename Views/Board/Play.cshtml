@@ -1,0 +1,43 @@
+@model ChessEngine.ViewModels.BoardViewModel
+
+<div class="game-layout">
+    <div class="board-panel">
+        <div class="board-column">
+        <div class="board" role="group" aria-label="Chess board" data-fen="@Model.FenString" data-starting-fen="@Model.FenString" data-legal-moves-url="@Url.Action("LegalMoves", "Board")" data-make-move-url="@Url.Action("MakeMove", "Board")" data-evaluate-url="@Url.Action("Evaluate", "Board")" data-image-base-url="@Url.Content("~/images/")" data-check-rank="@Model.CheckedKingRank" data-check-file="@Model.CheckedKingFile" data-is-check="@Model.IsCheck" data-is-checkmate="@Model.IsCheckmate" data-is-stalemate="@Model.IsStalemate" data-starting-check-rank="@Model.CheckedKingRank" data-starting-check-file="@Model.CheckedKingFile" data-starting-is-check="@Model.IsCheck" data-starting-is-checkmate="@Model.IsCheckmate" data-starting-is-stalemate="@Model.IsStalemate">
+            @foreach (var square in Model.Squares)
+            {
+                var squareColor = (square.Rank + square.File) % 2 == 0 ? "dark" : "light";
+                <button type="button" class="@(squareColor) square" data-rank="@square.Rank" data-file="@square.File" aria-label="Square @square.Rank, @square.File">
+                    @if (square.Piece != null)
+                    {
+                        <img src="@Url.Content($"~/images/{square.Piece.Name}.svg")" alt="@square.Piece.Name?.Replace('_', ' ')" class="piece" data-color="@square.Piece.Color" draggable="true" />
+                    }
+                </button>
+            }
+        </div>
+        <p id="board-status" role="status" aria-live="polite"><strong>White</strong> to move</p>
+        </div>
+        <p id="game-result" class="game-result" role="alert" hidden></p>
+        <div class="board-controls">
+            <button id="reset-board" type="button">Reset board</button>
+        </div>
+        <div id="promotion-picker" class="promotion-picker" role="group" aria-label="Choose a promotion piece" hidden>
+            <span>Promote to:</span>
+            <button type="button" data-promotion="queen">Queen</button>
+            <button type="button" data-promotion="rook">Rook</button>
+            <button type="button" data-promotion="bishop">Bishop</button>
+            <button type="button" data-promotion="knight">Knight</button>
+            <button type="button" data-promotion="cancel">Cancel</button>
+        </div>
+    </div>
+    <div class="evaluation-panel" aria-label="Position evaluation">
+        <div id="evaluation-bar" class="evaluation-bar" role="meter" aria-label="White advantage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="Equal position">
+            <div id="evaluation-bar-white" class="evaluation-bar-white"></div>
+        </div>
+        <output id="evaluation-score" class="evaluation-score" aria-live="polite">Evaluating…</output>
+    </div>
+    <section class="move-history-panel" aria-label="Move history">
+        <ol id="move-history" class="move-history" aria-live="polite"></ol>
+        <p id="history-empty">No moves yet.</p>
+    </section>
+</div>

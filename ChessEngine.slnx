@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../ChessEngineTests/ChessEngineTests.csproj" Id="8c4a6402-4856-4d71-96ba-586a73ca3ee4" />
+  <Project Path="ChessEngine.csproj" />
+</Solution>
