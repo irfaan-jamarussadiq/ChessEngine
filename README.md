@@ -8,6 +8,10 @@ Chess Engine is a personal software engineering project focused on implementing 
 
 The project explores algorithmic problem-solving, performance optimization, object-oriented design, and full-stack development using the .NET ecosystem.
 
+## Application Preview
+
+![Chess Engine application](docs/chess-engine.png)
+
 ## Features
 
 - **Chess board representation:** Manage chess positions and piece placement using bitboards.
